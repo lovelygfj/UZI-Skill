@@ -12,7 +12,7 @@
 [![Methods](https://img.shields.io/badge/Institutional%20Methods-17-red)]()
 [![Self-Review](https://img.shields.io/badge/Self--Review-13%20checks-blueviolet)](skills/deep-analysis/scripts/lib/self_review.py)
 
-A 股 / 港股 / 美股 · 个股深度分析引擎 · **v3.4.2 Windows Clash 兼容（baostock 双 fallback）· v3.4.1 verdict 粒度细化 · v3.4.0 ETF/LOF 持仓循环分析 · v3.2.0 assemble_report -80%**
+A 股 / 港股 / 美股 · 个股深度分析引擎 · **v3.4.3 开放式基金分类修复 + 字段级 fallback · v3.4.2 Windows Clash 兼容 · v3.4.1 verdict 粒度细化 · v3.4.0 基金/ETF 持仓循环**
 
 [安装](#安装) · [用法](#用法) · [三档深度](#-三档思考深度v2103-新增) · [Hermes 🆕](INSTALL-HERMES.md) · [评审团](#-51-位评审团) · [机构方法](#-17-种机构级方法) · [自查 gate](#-机械级自查-gatev29-起) · [报告截图](#-报告长什么样) · [FAQ](#-faq) · [入群交流测试](#-测试交流群) · [Contributors](CONTRIBUTORS.md)
 
@@ -719,6 +719,7 @@ python run.py <ticker> --no-resume
 
 | 版本 | 日期 | 主要变化 |
 |---|---|---|
+| **v3.4.3** | 2026-05-12 | **开放式基金分类修复 + 字段级 fallback gate** · (1) [#60 复议](https://github.com/wbh604/UZI-Skill/issues/60) (@SchrodingerBarbatos) · 用户输 110011 易方达优质 → 被错判 convertible_bond early-exit. 修法：`classify_security_type` 在判 cb 前用 `akshare.fund_name_em` 二次校验 · 加 `mutual_fund` 类型 · run.py + preflight 路由到 fund_holdings_runner · 005xxx 等股票前缀外的基金也识别. (2) [PR #63](https://github.com/wbh604/UZI-Skill/pull/63) (@Wood Letitia · 313+137 行) · 字段级 fallback gate · 修 source-level 整块切换导致 name 永远缺的问题 · 主源拿到 price/PE/PB 但 name 空时 · 自动调 tencent_qt → baostock → ak_code_name 补全 · 仅填空不覆盖. 386 tests passed |
 | **v3.4.2** | 2026-05-11 | **Windows + Clash + Schannel TLS 兼容** · 社群反馈"Clash 国内规则 DIRECT 还是 Schannel · 东方财富彻底不可用 · 只有 baostock 能用". 修法：(1) `lib/data_sources.fetch_basic` 在所有 eastmoney 链路（xueqiu / push2 / baidu / tencent_qt）后追加 baostock fallback · `query_history_k_data_plus` 拿 peTTM/pbMRQ/close · `query_stock_basic` 拿 name/listed_date; (2) `fetch_financials._fetch_a_share` 当 ROE/营收/净利率全空时调 baostock `query_profit_data` 拉 5 年季报 · 解析 ROE history / 营收 history / 净利率 / 毛利率. 实测茅台 baostock 拿到 ROE=19.25% / 净利率 52.6% / 营收 893.5 亿. 6 个新回归 test (含真机烟雾) · 总 374 passed |
 | **v3.4.1** | 2026-05-11 | **verdict 粒度细化** · 社群反馈"神剑股份(58分) / 博云新材(60分) verdict 都是观望优先 看不出差异". 修法：(1) verdict 50-65 拆三档（观望偏空 50-55 / 观望中性 55-60 / 观望偏多 60-65）· 65-70 加"可以蹲（偏弱）"; (2) verdict label 追加"X 派看多 / Y 派看空"; (3) synthesis 加 `verdict_detail = "基本面 X · 共识 Y"` · assemble_report 渲染时拼到 verdict 后. 改后两只票 verdict 仍同段（55-60）但 detail 让基本面 +2 分差异显式可见. 5 个新回归 test · 总 368 passed |
 | **v3.4.0** | 2026-05-10 | **基金/ETF 持仓循环分析 + baostock ≥0.9.1** · ETF/LOF 不再 early-exit · 改为列出前 10 持仓 + 估算耗时 + **二次确认**（y / 数字 / N） · 确认后循环跑 stock-analyze + 生成 fund-holdings-summary.html. partial failure 容忍 · `UZI_FUND_AUTO_YES=1` 跳过 prompt（CI/agent）. 可转债/指数仍 early-exit. 同时 `requirements.txt` 锁 `baostock>=0.9.1` (社群通知 2026-04-22 起服务端要求). 新建 `lib/fund_holdings_runner.py` (240 行) · 7 个回归测试 · 总 362 passed. 真机：510300 持仓正确拉到（茅台 5.89% top1） |

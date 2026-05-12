@@ -1,5 +1,73 @@
 # Release Notes
 
+## v3.4.3 — 2026-05-12 (开放式基金分类修复 + 字段级 fallback gate)
+
+### 改动 1 · 开放式基金（OEIC）正确分类 · issue #60 复议
+
+> **社群反馈** @SchrodingerBarbatos：基金分析"复议希望支持"
+
+v3.4.0 已加 ETF/LOF 持仓循环 · 但用户输入 **110011（易方达优质开放式基金）** 时 · `classify_security_type` 按前缀规则误判为 `convertible_bond` → 直接 early-exit · **没机会走 fund_holdings_runner**.
+
+#### 根因
+
+110011 / 005827 等开放式基金代码与 SH 老转债（11xxxx）/ 早期股票（00xxxx）前缀重叠 · 仅按前缀规则无法区分.
+
+#### 修法
+
+1. `lib/market_router.py::classify_security_type` 在判 `convertible_bond` 之前 · 用 `akshare.fund_name_em()` 二次校验（懒加载 + 全表 set 缓存 · O(1) 查询 · 失败 silent fallback）
+2. 新增 `mutual_fund` 类型 · `SecurityType` Literal 扩展
+3. `run.py` + `preflight_helpers` 把 `mutual_fund` 也路由到 `fund_holdings_runner`（跟 ETF/LOF 一样循环分析持仓）
+4. `akshare.fund_portfolio_hold_em` 对所有 ETF/LOF/开放式基金都 work
+
+#### 实测分类
+
+| 代码 | 名称 | 修前 | 修后 |
+|---|---|---|---|
+| 110011 | 易方达优质（开放式）| ❌ convertible_bond | ✅ **mutual_fund** |
+| 005827 | 易方达蓝筹（开放式）| ❌ unknown | ✅ **mutual_fund** |
+| 113008 | 广汽转债（真转债）| ✅ cb | ✅ cb（不误伤） |
+| 510300 | 沪深 300 ETF | ✅ etf | ✅ etf |
+| 161005 | 富国天惠（LOF）| ✅ lof | ✅ lof |
+| 600519 | 茅台 | ✅ stock | ✅ stock |
+
+### 改动 2 · A 股 basic 字段级 fallback gate · PR #63
+
+> **社群贡献** @Wood Letitia (PR #63 · 313 行 + 137 行 test)
+
+之前 fallback 是 source-level 整块切换：xueqiu 拿到 price/PE/PB 但 name 空 → early return · 不走后续 baidu/tencent/baostock · 导致 **name 永远缺**.
+
+修法（PR #63）：
+- 新增 `_ensure_a_share_basic_fields(out, ti)` · 在主源 early-return 前 / 后调一次
+- 字段级补漏：name/price/pe_ttm/pb/market_cap/industry/listed_date 任一字段缺 → 调备用源（tencent_qt → baostock → ak_code_name → 硬编码 industry 映射）
+- `_merge_missing_basic_fields` 只填空 · 不覆盖已有值
+- `_append_fallback_snap` 去重 provenance 标记
+
+#### 真机验证
+
+```
+600519.SH:
+  name: 贵州茅台
+  price: 1354.55
+  pe_ttm: 20.51
+  pb: 6.26
+  industry: 白酒Ⅱ
+  listed_date: 2001-08-27
+  _fallback_snap: tencent-qt+field:tencent_qt+field:baostock
+```
+
+### 测试
+
+- 新增 `tests/test_v3_4_3_mutual_fund_classification.py` (6 tests)
+- PR #63 自带 `tests/test_basic_name_fallback.py` (137 行)
+- **总套件 386 tests 全过**（380 baseline + 6 新）
+
+### 致谢
+
+- @SchrodingerBarbatos · #60 复议 · 让我们发现 110011 类基金的分类误判
+- @Wood Letitia · PR #63 · 字段级 fallback gate 设计
+
+---
+
 ## v3.4.2 — 2026-05-11 (Windows + Clash Schannel TLS 兼容 · baostock 双 fallback)
 
 > **社群反馈** (Windows + Clash 用户)：

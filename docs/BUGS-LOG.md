@@ -7,6 +7,38 @@
 
 ---
 
+## v3.4.3 (2026-05-12 · 开放式基金分类修复 + 字段级 fallback gate)
+
+### BUG #60-followup · 开放式基金被误判为 convertible_bond
+- **症状**：用户输 110011（易方达优质混合）→ classify_security_type 返 `convertible_bond` → early-exit · v3.4.0 加的 fund_holdings_runner 无机会触发
+- **位置**：`lib/market_router.py::classify_security_type`
+- **根因**：仅按前缀规则分类 · 110xxx 既是 SH 老转债前缀 也是开放式基金代码 · 同样 005xxx 不是股票前缀但是基金
+- **修法**：
+  1. 新增 `SecurityType` literal `mutual_fund`
+  2. 在判 `convertible_bond` 之前 · 用 `akshare.fund_name_em()` 二次校验（懒加载 + 全表 set 缓存）· 基金代码优先识别为 mutual_fund
+  3. 对不在 stock 前缀的码段（如 005xxx）· 也查一下基金清单
+  4. run.py + preflight_helpers 把 mutual_fund 路由到 fund_holdings_runner
+- **验证**：110011 → mutual_fund ✅ · 113008 真转债 → cb ✅（不误伤）
+- **回归测试**：`tests/test_v3_4_3_mutual_fund_classification.py` (6 tests)
+- **未来改该区域注意事项**：
+  - `_is_mutual_fund_code` 是懒加载 module-level 缓存 · 单进程内只下载一次 · 不要在 hot path 调
+  - `fund_name_em` 失败时 silent fallback 到老前缀规则 · 不抛异常（保证向后兼容）
+  - 新增 sec_type 时 · run.py 两处分支 + preflight + fetch_basic 四处都要加路由
+  - `akshare.fund_portfolio_hold_em` 对 ETF/LOF/mutual_fund 都 work · 不需为 mutual_fund 单独写持仓拉取
+
+### REFACTOR (PR #63) · A 股 basic 字段级 fallback gate
+- **症状**：xueqiu 拿到 price/PE/PB 但 name 空 → early return 跳过后续 fallback · 报告 name 永远显示为空
+- **位置**：`lib/data_sources.py` · 新增 `_ensure_a_share_basic_fields` gate
+- **根因**：之前 fallback 是 source-level（一个源 ok 就 early return）· 没做字段级 patch
+- **修法**：新增 `_merge_missing_basic_fields` · 仅填空不覆盖 · 4 个早 return 点全部走 `_ensure_a_share_basic_fields` 字段级 gate · 备用源链 tencent_qt → baostock → ak_code_name → known_industry
+- **验证**：茅台 600519 拿到 name=贵州茅台 / price / pe_ttm / pb / industry=白酒Ⅱ / listed_date 全字段
+- **未来改该区域注意事项**：
+  - `_merge_missing_basic_fields` 默认只填指定字段集 · 加新字段需更新 `fields` 元组
+  - `_fallback_snap` 标记会去重 · 别在 hot loop 里反复 append 同 marker
+  - `_ensure_a_share_basic_fields` 调用应在所有主 fallback 之后 · 否则被覆盖
+
+---
+
 ## v3.4.2 (2026-05-11 · Windows + Clash Schannel TLS 兼容 · baostock 双 fallback)
 
 ### BUG · Windows Python + Schannel TLS 与东财不兼容 · PE/PB/ROE 全空

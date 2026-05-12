@@ -397,7 +397,7 @@ def main():
         # v3.4.0 · ETF/LOF 改为持仓循环分析（用户二次确认）
         if isinstance(stage1_result, dict) and stage1_result.get("status") == "non_stock_security":
             sec_type = stage1_result.get("security_type", "")
-            if sec_type in ("etf", "lof") and stage1_result.get("top_holdings"):
+            if sec_type in ("etf", "lof", "mutual_fund") and stage1_result.get("top_holdings"):
                 print(f"\n💡 {args.ticker} 是 {stage1_result.get('label', sec_type.upper())} · v3.4.0 起支持循环分析持仓股")
                 from lib.fund_holdings_runner import confirm_and_run_holdings
                 auto_yes = os.environ.get("UZI_FUND_AUTO_YES") == "1"
@@ -465,7 +465,7 @@ def main():
             if status == "non_stock_security":
                 sec_type = result.get("security_type", "")
                 # v3.4.0 · ETF/LOF 走持仓循环分析（用户二次确认）· 可转债 / 指数仍 early-exit
-                if sec_type in ("etf", "lof") and result.get("top_holdings"):
+                if sec_type in ("etf", "lof", "mutual_fund") and result.get("top_holdings"):
                     print(f"💡 {args.ticker} 是 {result.get('label', sec_type.upper())} · v3.4.0 起支持循环分析持仓股")
                     print(f"{'━' * 50}")
                     from lib.fund_holdings_runner import confirm_and_run_holdings
